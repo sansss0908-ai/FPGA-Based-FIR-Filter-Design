@@ -18,7 +18,13 @@ generates:
 
 - `fir_coeff_q15.txt`: decimal Q15 coefficients
 - `fir_coeff_q15.mem`: hexadecimal coefficients for Verilog `$readmemh`
-- `sensor_fir_output.csv`: MATLAB reference output
+- `sensor_fir_output.csv`: floating-point and bit-accurate FPGA reference
+  outputs (`Filtered_Accel_Z_Floating` and `Filtered_Accel_Z_FPGA`)
+
+The FPGA reference treats each input as a signed 16-bit integer, multiplies it
+by each signed Q15 coefficient, accumulates in 64 bits, performs an arithmetic
+right shift by 15, and saturates the result to signed 16 bits. The HDL must
+implement the same rules for sample-by-sample comparison with the CSV.
 
 In VS Code, install the **MATLAB** extension, open this folder, configure the
 extension to use the installed MATLAB executable, and run the script from the
@@ -33,3 +39,18 @@ input and `sensor_data.mem` sample file from the STM32 UART stream.
 The STM32 timer is configured for 500 Hz with the current 84 MHz timer clock.
 Verify the actual sample period on hardware before changing `Fs` in the
 MATLAB script.
+
+## FPGA integration checklist
+
+The FPGA project must provide HDL source and a testbench that:
+
+1. Loads all 64 lines of `fir_coeff_q15.mem` in tap order.
+2. Accepts the two SPI bytes as one signed 16-bit sample.
+3. Produces one signed 16-bit output for each accepted sample.
+4. Applies the Q15 scaling and saturation rules described above.
+5. Writes captured FPGA outputs to a file that can be compared with
+   `Filtered_Accel_Z_FPGA` in `sensor_fir_output.csv`.
+
+The current repository contains the STM32 firmware and a compiled `fir_sim`
+artifact, but not the FPGA HDL source or a reproducible HDL comparison
+testbench. Those are still required for an end-to-end FPGA result.

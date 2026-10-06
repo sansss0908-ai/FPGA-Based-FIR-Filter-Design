@@ -11,6 +11,12 @@
 * **Scale Factor:** $1\text{ g} = 16384 \text{ LSB}$ ($\pm 2\text{g}$ full scale)
 * **Coefficient Format:** Q15 Signed Fixed-Point ($1\text{ sign bit}, 15\text{ fractional bits}$)
   $$\text{Coeff}_{\text{Q15}} = \text{round}(h[n] \times 32768)$$
+* **Accumulator:** Signed 64-bit minimum
+* **Output scaling:** Arithmetic right shift by 15 after accumulation
+* **Output range:** Saturate to signed 16-bit range (`-32768` to `32767`)
+* **Startup behavior:** The 64-sample delay line is cleared to zero; therefore
+  the first 63 outputs are the filter startup transient and must not be
+  discarded when checking cycle alignment.
 
 ## 3. Communication Protocol (STM32 $\rightarrow$ FPGA)
 * **Bus:** SPI Master (Mode 0, MSB First, $2.625\text{ MBits/s}$)
