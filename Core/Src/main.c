@@ -53,6 +53,7 @@
 volatile uint8_t timer_flag = 0;
 uint8_t tx_buffer[64];
 MPU6050_Data_t mpu_data;
+uint8_t mpu_addr = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -120,7 +121,6 @@ int main(void)
     HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
 
     // 2. Scan I2C bus for MPU6050 address (0x68 or 0x69)
-    uint8_t mpu_addr = 0;
     for (uint8_t addr = 1; addr < 128; addr++)
     {
         if (HAL_I2C_IsDeviceReady(&hi2c1, (uint16_t)(addr << 1), 2, 50) == HAL_OK)
