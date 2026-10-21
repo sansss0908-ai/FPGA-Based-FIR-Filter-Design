@@ -51,6 +51,28 @@ The FPGA project must provide HDL source and a testbench that:
 5. Writes captured FPGA outputs to a file that can be compared with
    `Filtered_Accel_Z_FPGA` in `sensor_fir_output.csv`.
 
-The current repository contains the STM32 firmware and a compiled `fir_sim`
-artifact, but not the FPGA HDL source or a reproducible HDL comparison
-testbench. Those are still required for an end-to-end FPGA result.
+The repository contains the STM32 firmware, a compiled `fir_sim` artifact,
+and the FPGA HDL source and reproducible comparison testbench described below.
+
+## Verilog FIR implementation
+
+The repository includes:
+
+- `fir_filter.v`: a synthesizable 64-tap streaming FIR. Assert `sample_valid`
+  for one clock cycle when `din` contains a new signed 16-bit sample; the
+  corresponding signed 16-bit result is available on `dout` after that clock.
+- `fir_coeff_q15.mem`: the 64 signed Q15 coefficients in tap order for
+  `$readmemh`.
+- `tb_fir_filter.v`: a self-checking simulation testbench covering startup,
+  signed inputs, and output saturation.
+
+Run with Icarus Verilog from this directory:
+
+```text
+iverilog -g2012 -o fir_tb.vvp fir_filter.v tb_fir_filter.v
+vvp fir_tb.vvp
+```
+
+The HDL uses the same zero-initialized delay line, 64-bit accumulation,
+arithmetic right shift by 15, and signed 16-bit saturation as the MATLAB
+`yFpga` reference.
