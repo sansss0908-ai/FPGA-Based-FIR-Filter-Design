@@ -52,7 +52,7 @@ The FPGA project must provide HDL source and a testbench that:
    `Filtered_Accel_Z_FPGA` in `sensor_fir_output.csv`.
 
 The repository contains the STM32 firmware, a compiled `fir_sim` artifact,
-and the FPGA HDL source and reproducible comparison testbench described below.
+and the FPGA HDL source and reproducible comparison testbenches described below.
 
 ## Verilog FIR implementation
 
@@ -65,6 +65,19 @@ The repository includes:
   `$readmemh`.
 - `tb_fir_filter.v`: a self-checking simulation testbench covering startup,
   signed inputs, and output saturation.
+- `tb_fir_filter_real.v`: loads all 1000 samples from `sensor_data.mem`,
+  writes each HDL `dout` value to `fpga_output.txt`, and preserves startup
+  samples. The bench checks that one output is written for every input sample
+  and creates `fir_real_wave.vcd` for GTKWave analysis.
+- `compare_fpga_output.py`: compares `fpga_output.txt` against the
+  `Filtered_Accel_Z_FPGA` column in `sensor_fir_output.csv` and verifies the
+  CSV has exactly the four generated columns.
+- `spi_slave_sample.v`: mode-0 SPI slave that assembles two MSB-first bytes
+  and pulses `sample_valid` on each complete sample.
+- `tb_spi_slave_sample.v`: checks two-byte MSB-first sample assembly.
+- `fir_filter_serial.v`: one-tap-per-clock FIR alternative. It exposes
+  `ready` and takes 64 clocks per accepted sample instead of using 64
+  multipliers concurrently.
 
 Run with Icarus Verilog from this directory:
 
@@ -73,6 +86,40 @@ iverilog -g2012 -o fir_tb.vvp fir_filter.v tb_fir_filter.v
 vvp fir_tb.vvp
 ```
 
+The SPI receiver check is:
+
+```text
+iverilog -g2012 -o spi_tb.vvp spi_slave_sample.v tb_spi_slave_sample.v
+vvp spi_tb.vvp
+```
+
+For the real captured dataset, first run `design_fir_from_sensor` in MATLAB,
+then run:
+
+```text
+iverilog -g2012 -o fir_real_tb.vvp fir_filter.v tb_fir_filter_real.v
+vvp fir_real_tb.vvp
+python compare_fpga_output.py
+```
+
+The real-data testbench also writes a waveform dump. Open it with GTKWave:
+
+```text
+gtkwave fir_real_wave.vcd
+```
+
+Useful signals to add in GTKWave are `clk`, `rst_n`, `sample_valid`, `din`,
+`dout`, and the FIR internals under `uut`, such as `accumulator`,
+`scaled_result`, `product`, and `delay_line`.
+
+The Python step is the CSV diff: it requires exactly 1000 output lines and
+reports the first mismatch, including its sample index and both values.
+
 The HDL uses the same zero-initialized delay line, 64-bit accumulation,
 arithmetic right shift by 15, and signed 16-bit saturation as the MATLAB
 `yFpga` reference.
+
+`fir_coeff_q15.txt` and `sensor_fir_output.csv` are generated MATLAB
+artifacts and are intentionally not source-controlled. `fir_coeff_q15.mem`
+and `sensor_data.mem` are checked-in simulation inputs, so the HDL testbench
+can run reproducibly after the MATLAB reference CSV has been generated.

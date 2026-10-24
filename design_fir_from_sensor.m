@@ -21,6 +21,8 @@ else
     x = double(data{:, 1});
 end
 x = x(:);
+fprintf('Raw min = %d, max = %d (int16 limits: -32768, 32767)\n', min(x), max(x));
+fprintf('Samples at the limits: %d\n', sum(x <= -32768 | x >= 32767));
 if isempty(x) || any(~isfinite(x))
     error('The input CSV contains no valid finite samples.');
 end
@@ -39,6 +41,7 @@ yFloating = filter(h, 1, double(xInt16));
 % Convert coefficients to signed Q15 for the FPGA.
 coeffQ15 = round(h * 32768);
 coeffQ15 = min(max(coeffQ15, -32768), 32767);
+coeffQ15 = coeffQ15(:);
 
 % Bit-accurate reference for the FPGA datapath:
 % signed 16-bit samples * signed Q15 coefficients, 64-bit accumulation,
@@ -52,6 +55,12 @@ for n = 1:numel(xInt16)
     acc(n) = sum(int64(xInt16(sampleIndices)) .* int64(coeffQ15(coeffIndices)));
     scaled = bitshift(acc(n), -15);
     yFpga(n) = int16(min(max(scaled, int64(-32768)), int64(32767)));
+end
+
+% MATLAB bitshift on signed integers must match Verilog's arithmetic >>>.
+negativeAccumulator = int64(-1);
+if bitshift(negativeAccumulator, -15) ~= negativeAccumulator
+    error('Signed right-shift behavior does not match Verilog arithmetic shift.');
 end
 
 % Write decimal coefficients and one 16-bit two's-complement hex word per line.
@@ -84,11 +93,20 @@ plot((0:numel(yFpga)-1)' / Fs, yFpga);
 grid on;
 xlabel('Time (s)');
 ylabel('Filtered raw counts');
-title(sprintf('64-tap Q15 FPGA reference (%g-%g Hz)', Fpass, Fstop));
+title(sprintf('64-tap Q15 FPGA reference (pass 0-%g Hz, stop %g Hz)', Fpass, Fstop));
 
 figure('Name', 'FIR response');
 freqz(h, 1, 2048, Fs);
 title('Designed FIR frequency response');
+
+[Hf, f] = freqz(h, 1, 2048, Fs);
+[Hq, ~] = freqz(double(coeffQ15)/32768, 1, 2048, Fs);
+figure('Name', 'Float vs Q15 response');
+plot(f, 20*log10(abs(Hf)), f, 20*log10(abs(Hq)));
+grid on;
+legend('Floating', 'Q15');
+xlabel('Frequency (Hz)');
+ylabel('Magnitude (dB)');
 
 fprintf('Designed %d-tap FIR for Fs = %g Hz.\n', numel(h), Fs);
 fprintf('Passband: 0-%g Hz; stopband starts at %g Hz.\n', Fpass, Fstop);
