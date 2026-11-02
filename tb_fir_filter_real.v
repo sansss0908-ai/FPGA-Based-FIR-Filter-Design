@@ -31,6 +31,7 @@ module tb_fir_filter_real;
     initial begin
         $dumpfile(VCD_FILE);
         $dumpvars(0, tb_fir_filter_real);
+        $dumpon;
 
         $readmemh(SENSOR_MEM_FILE, samples);
         output_file = $fopen(OUTPUT_FILE, "w");
@@ -43,18 +44,23 @@ module tb_fir_filter_real;
         repeat (3) @(posedge clk);
         rst_n = 1'b1;
 
+        $display("Sample | Input value | Filtered value");
+        $display("--------------------------------------");
         for (i = 0; i < NUM_SAMPLES; i = i + 1) begin
             @(negedge clk);
             din = samples[i];
             sample_valid = 1'b1;
             @(posedge clk);
-            #1 $fwrite(output_file, "%0d\n", dout);
+            #1 begin
+                $display("%0d | %0d | %0d", i, $signed(din), $signed(dout));
+                $fwrite(output_file, "%0d\n", dout);
+            end
             output_count = output_count + 1;
             sample_valid = 1'b0;
         end
 
         $fclose(output_file);
-        $dumpoff;
+        $dumpflush;
         if (output_count != NUM_SAMPLES) begin
             $display("FAIL: wrote %0d outputs; expected %0d.",
                      output_count, NUM_SAMPLES);

@@ -66,9 +66,10 @@ The repository includes:
 - `tb_fir_filter.v`: a self-checking simulation testbench covering startup,
   signed inputs, and output saturation.
 - `tb_fir_filter_real.v`: loads all 1000 samples from `sensor_data.mem`,
-  writes each HDL `dout` value to `fpga_output.txt`, and preserves startup
-  samples. The bench checks that one output is written for every input sample
-  and creates `fir_real_wave.vcd` for GTKWave analysis.
+  prints each input and corresponding filtered HDL `dout` value to the
+  terminal, writes each `dout` value to `fpga_output.txt`, and preserves
+  startup samples. The bench checks that one output is written for every input
+  sample and creates `fir_real_wave.vcd` for GTKWave analysis.
 - `compare_fpga_output.py`: compares `fpga_output.txt` against the
   `Filtered_Accel_Z_FPGA` column in `sensor_fir_output.csv` and verifies the
   CSV has exactly the four generated columns.
@@ -108,9 +109,14 @@ The real-data testbench also writes a waveform dump. Open it with GTKWave:
 gtkwave fir_real_wave.vcd
 ```
 
-Useful signals to add in GTKWave are `clk`, `rst_n`, `sample_valid`, `din`,
-`dout`, and the FIR internals under `uut`, such as `accumulator`,
-`scaled_result`, `product`, and `delay_line`.
+After GTKWave opens, expand `tb_fir_filter_real` in the upper-left hierarchy
+pane. Select `clk`, `rst_n`, `sample_valid`, `din`, and `dout`, then click the
+green **Insert** button (or drag the signals into the waveform pane). Expand
+the `uut` scope and add `accumulator`, `scaled_result`, and `product` for
+internal FIR analysis. Click the zoom-to-fit button or press `Ctrl+F` to show
+the complete simulation. The testbench explicitly keeps dumping these
+signals and flushes the VCD before exiting, so rerun the `iverilog` and `vvp`
+commands above whenever the HDL changes before opening the VCD.
 
 The Python step is the CSV diff: it requires exactly 1000 output lines and
 reports the first mismatch, including its sample index and both values.
