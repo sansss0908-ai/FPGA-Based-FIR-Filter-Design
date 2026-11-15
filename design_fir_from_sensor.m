@@ -108,6 +108,34 @@ legend('Floating', 'Q15');
 xlabel('Frequency (Hz)');
 ylabel('Magnitude (dB)');
 
+%% Elliptic IIR comparison (same pass/stop band as the FIR)
+% Used only for the paper's FIR-vs-IIR comparison. Not part of the FPGA design.
+pbIdx = f <= Fpass;                         % f and Hf come from the freqz call above
+sbIdx = f >= Fstop;
+Rp = max(abs(20*log10(abs(Hf(pbIdx)))));    % measured FIR pass-band ripple (dB)
+Rs = -max(20*log10(abs(Hf(sbIdx))));        % measured FIR stop-band attenuation (dB)
+Rp = max(Rp, 0.01);                         % guard against a zero ripple value
+fprintf('FIR: pass-band ripple %.3f dB, stop-band attenuation %.1f dB\n', Rp, Rs);
+
+[nIIR, Wn] = ellipord(Fpass/(Fs/2), Fstop/(Fs/2), Rp, Rs);
+[bI, aI]   = ellip(nIIR, Rp, Rs, Wn);
+[gdI, fI]  = grpdelay(bI, aI, 2048, Fs);
+gdMs       = gdI(fI <= Fpass) / Fs * 1000;  % IIR group delay in ms over the pass band
+fprintf('Elliptic IIR order %d; stable = %d; group delay %.1f to %.1f ms over 0-%g Hz\n', ...
+        nIIR, isstable(bI, aI), min(gdMs), max(gdMs), Fpass);
+
+yIIR = filter(bI, aI, double(xInt16));      % IIR output on the same data
+
+tIdx = (0:numel(x)-1)' / Fs;
+figure('Name', 'FIR vs IIR');
+plot(tIdx, double(yFpga) - mean(double(yFpga(64:end))), ...
+     tIdx, yIIR - mean(yIIR));
+grid on;
+legend('FIR (Q15)', 'IIR (elliptic)');
+xlabel('Time (s)');
+ylabel('Counts (mean removed)');
+title('FIR versus IIR output on the same data');
+
 fprintf('Designed %d-tap FIR for Fs = %g Hz.\n', numel(h), Fs);
 fprintf('Passband: 0-%g Hz; stopband starts at %g Hz.\n', Fpass, Fstop);
 fprintf('Generated fir_coeff_q15.txt, fir_coeff_q15.mem, and sensor_fir_output.csv.\n');
