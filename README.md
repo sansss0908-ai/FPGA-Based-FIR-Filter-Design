@@ -83,11 +83,24 @@ The repository includes:
   checks the 64 coefficient words, then compares every FPGA result against
   the `Filtered_Accel_Z_FPGA` column in `sensor_fir_output.csv`.
 - `spi_slave_sample.v`: mode-0 SPI slave that assembles two MSB-first bytes
-  and pulses `sample_valid` on each complete sample.
+  and asserts `sample_valid` on each complete sample.
 - `tb_spi_slave_sample.v`: checks two-byte MSB-first sample assembly.
+- `sample_valid_sync.v`: synchronizes the SPI receiver's `sample_valid` level
+  into the system clock domain and turns its rising edge into a one-cycle
+  pulse. Use this before connecting the SPI receiver to either FIR core.
+- `tb_sample_valid_sync.v`: checks that a multi-clock asynchronous valid level
+  produces exactly one system-clock pulse.
+- `fir_filter_top.v`: board-pin-independent SPI-to-FIR top-level. It defaults
+  to the serial core (`SERIAL_CORE=1`); set `SERIAL_CORE=0` to select the
+  parallel core. It exposes the result, output-valid, and ready signals.
+- `tb_fir_filter_top.v`: smoke-tests two SPI samples through both top-level
+  core choices.
 - `fir_filter_serial.v`: one-tap-per-clock FIR alternative. It exposes
   `ready` and takes 64 clocks per accepted sample instead of using 64
   multipliers concurrently.
+- `tb_fir_filter_serial_real.v`: replays `sensor_data.mem`, waits for the
+  serial core's `output_valid` for every sample, and writes the outputs to
+  `fpga_serial_output.txt` for comparison with the MATLAB reference.
 
 Run with Icarus Verilog from this directory:
 
@@ -103,6 +116,22 @@ iverilog -g2012 -o spi_tb.vvp spi_slave_sample.v tb_spi_slave_sample.v
 vvp spi_tb.vvp
 ```
 
+The valid-level synchronizer check is:
+
+```text
+iverilog -g2012 -o valid_sync_tb.vvp sample_valid_sync.v tb_sample_valid_sync.v
+vvp valid_sync_tb.vvp
+```
+
+The SPI-to-FIR top-level check can be run with either implementation:
+
+```text
+iverilog -g2012 -s tb_fir_filter_top -o top_serial_tb.vvp spi_slave_sample.v sample_valid_sync.v fir_filter_serial.v fir_filter.v fir_filter_top.v tb_fir_filter_top.v
+vvp top_serial_tb.vvp
+iverilog -g2012 -DTEST_PARALLEL -s tb_fir_filter_top -o top_parallel_tb.vvp spi_slave_sample.v sample_valid_sync.v fir_filter_serial.v fir_filter.v fir_filter_top.v tb_fir_filter_top.v
+vvp top_parallel_tb.vvp
+```
+
 For the real captured dataset, first run `design_fir_from_sensor` in MATLAB,
 then run:
 
@@ -110,6 +139,15 @@ then run:
 iverilog -g2012 -o fir_real_tb.vvp fir_filter.v tb_fir_filter_real.v
 vvp fir_real_tb.vvp
 python compare_fpga_output.py
+```
+
+To test the serial FIR against the same captured dataset and MATLAB reference,
+run:
+
+```text
+iverilog -g2012 -o fir_serial_real_tb.vvp fir_filter_serial.v tb_fir_filter_serial_real.v
+vvp fir_serial_real_tb.vvp
+python compare_fpga_output.py sensor_fir_output.csv fpga_serial_output.txt
 ```
 
 The real-data testbench also writes a waveform dump. Open it with GTKWave:
@@ -135,6 +173,16 @@ agreement for that simulation run.
 The HDL uses the same zero-initialized delay line, 64-bit accumulation,
 arithmetic right shift by 15, and signed 16-bit saturation as the MATLAB
 `yFpga` reference.
+
+The SPI receiver's `sample_valid` is generated in the SCK clock domain and can
+remain high until the next SCK edge or chip-select deassertion. The top-level
+synchronizes and edge-detects it before feeding a system-clocked FIR core.
+`fir_filter_top.v` exposes a parallel sample/valid output interface; the
+physical output wiring/readout protocol and Tang Nano 20K `.cst` pin
+constraints still need to match the board revision and chosen wiring. The
+serial implementation has no input queue, so samples must arrive while `ready`
+is high; at 500 Hz, its 64-clock processing time is well below the sample
+interval when clocked at 27 MHz.
 
 `fir_coeff_q15.txt` and `sensor_fir_output.csv` are generated MATLAB
 artifacts and are intentionally not source-controlled. `fir_coeff_q15.mem`
