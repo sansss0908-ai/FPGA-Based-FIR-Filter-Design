@@ -25,9 +25,10 @@ HAL_StatusTypeDef MPU6050_Init(I2C_HandleTypeDef *hi2c) {
     data = 0x07;
     HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_REG_SMPLRT_DIV, 1, &data, 1, 100);
 
-    // 4. Configure Full Scale Range: Accel +/- 2g (0x00) & Gyro +/- 250 deg/s (0x00)
-    data = 0x00;
+    // 4. Configure Full Scale Range: Accel +/- 4g and Gyro +/- 250 deg/s.
+    data = MPU6050_ACCEL_CONFIG_4G;
     HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_REG_ACCEL_CONFIG, 1, &data, 1, 100);
+    data = 0x00;
     HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_REG_GYRO_CONFIG, 1, &data, 1, 100);
 
     return HAL_OK;
@@ -61,9 +62,9 @@ HAL_StatusTypeDef MPU6050_ReadAll(I2C_HandleTypeDef *hi2c, MPU6050_Data_t *data)
      * CONVERT TO PHYSICAL UNITS
      * --------------------------------------------------------------------- */
     // Accelerometer conversion (in g's)
-    data->accel_x_g = (float)raw_accel_x / MPU6050_ACCEL_SENS_2G;
-    data->accel_y_g = (float)raw_accel_y / MPU6050_ACCEL_SENS_2G;
-    data->accel_z_g = (float)raw_accel_z / MPU6050_ACCEL_SENS_2G;
+    data->accel_x_g = (float)raw_accel_x / MPU6050_ACCEL_SENS_4G;
+    data->accel_y_g = (float)raw_accel_y / MPU6050_ACCEL_SENS_4G;
+    data->accel_z_g = (float)raw_accel_z / MPU6050_ACCEL_SENS_4G;
 
     // Temperature formula from datasheet: Temperature in °C = (RAW / 340.0) + 36.53
     data->temp_c    = ((float)raw_temp / 340.0f) + 36.53f;

@@ -5,10 +5,25 @@
 clear; clc; close all;
 
 csvName = 'sensor_vibration_dataset.csv';
-Fs = 500;
+nominalFs = 500;
+rateFile = 'sample_rate_hz.txt';
+if exist(rateFile, 'file') == 2
+    Fs = str2double(strtrim(fileread(rateFile)));
+    if ~isscalar(Fs) || ~isfinite(Fs) || Fs <= 0
+        error('%s must contain one positive sample-rate value in Hz.', rateFile);
+    end
+    fprintf('Using measured sample rate: %.6f Hz\n', Fs);
+else
+    Fs = nominalFs;
+    warning('No %s found; using nominal Fs = %.0f Hz.', rateFile, nominalFs);
+end
 Fpass = 20;
 Fstop = 50;
 filterOrder = 63;
+if Fs <= 2 * Fstop
+    error('Measured Fs must exceed %.1f Hz for the %.1f Hz stopband.', ...
+        2 * Fstop, Fstop);
+end
 
 if exist(csvName, 'file') ~= 2
     error('Cannot find %s. Run this script from the project folder.', csvName);

@@ -33,12 +33,19 @@ local MATLAB installation; the extension does not provide MATLAB itself.
 
 ## Data capture
 
-Use `logger.py` after setting the correct serial `PORT`. It creates the CSV
-input and `sensor_data.mem` sample file from the STM32 UART stream.
+Use `logger.py` after setting the correct serial `PORT`. It captures for 60
+seconds, reports measured samples per second and int16 rail counts, and writes
+the CSV input, `sensor_data.mem`, and `sample_rate_hz.txt` from the STM32 UART
+stream. The MATLAB script uses the measured rate when that file is present.
+At 500 Hz it should collect about 30,000 samples. The checked-in 1,000-sample
+capture contains nine +32767 readings and is clipped; it cannot be repaired
+after capture. The firmware now configures ±4 g for new recordings, so rebuild
+and re-record before using the data as unclipped measurements.
 
-The STM32 timer is configured for 500 Hz with the current 84 MHz timer clock.
-Verify the actual sample period on hardware before changing `Fs` in the
-MATLAB script.
+The STM32 timer divisor is nominally 500 Hz with the current 84 MHz timer
+clock. The logger measures the effective UART sample rate over the capture;
+inspect `sample_rate_hz.txt` after each recording. The measurement requires
+the board to be running and cannot be verified by simulation alone.
 
 ## FPGA integration checklist
 
@@ -65,14 +72,13 @@ The repository includes:
   `$readmemh`.
 - `tb_fir_filter.v`: a self-checking simulation testbench covering startup,
   signed inputs, and output saturation.
-- `tb_fir_filter_real.v`: loads all 1000 samples from `sensor_data.mem`,
-  prints each input and corresponding filtered HDL `dout` value to the
-  terminal, writes each `dout` value to `fpga_output.txt`, and preserves
-  startup samples. The bench checks that one output is written for every input
-  sample and creates `fir_real_wave.vcd` for GTKWave analysis.
-- `compare_fpga_output.py`: compares `fpga_output.txt` against the
-  `Filtered_Accel_Z_FPGA` column in `sensor_fir_output.csv` and verifies the
-  CSV has exactly the four generated columns.
+- `tb_fir_filter_real.v`: loads all samples from `sensor_data.mem`, writes each
+  filtered HDL `dout` value to `fpga_output.txt`, preserves startup samples,
+  checks the input file and output count, and creates `fir_real_wave.vcd`.
+  The testbench does not itself validate the output values.
+- `compare_fpga_output.py`: verifies the sensor CSV and `.mem` inputs match,
+  checks the 64 coefficient words, then compares every FPGA result against
+  the `Filtered_Accel_Z_FPGA` column in `sensor_fir_output.csv`.
 - `spi_slave_sample.v`: mode-0 SPI slave that assembles two MSB-first bytes
   and pulses `sample_valid` on each complete sample.
 - `tb_spi_slave_sample.v`: checks two-byte MSB-first sample assembly.
@@ -118,8 +124,10 @@ the complete simulation. The testbench explicitly keeps dumping these
 signals and flushes the VCD before exiting, so rerun the `iverilog` and `vvp`
 commands above whenever the HDL changes before opening the VCD.
 
-The Python step is the CSV diff: it requires exactly 1000 output lines and
-reports the first mismatch, including its sample index and both values.
+The Python step first verifies that `sensor_data.mem` exactly matches the
+sensor CSV, then compares every FPGA result with the generated
+`Filtered_Accel_Z_FPGA` reference. Only zero mismatches establishes bit-accurate
+agreement for that simulation run.
 
 The HDL uses the same zero-initialized delay line, 64-bit accumulation,
 arithmetic right shift by 15, and signed 16-bit saturation as the MATLAB

@@ -143,7 +143,7 @@ int main(void)
         uint8_t wake_data = 0x00;
         HAL_I2C_Mem_Write(&hi2c1, mpu_addr, 0x6B, 1, &wake_data, 1, 100); // PWR_MGMT_1
 
-        uint8_t config_data = 0x00; // ±2g scale
+        uint8_t config_data = MPU6050_ACCEL_CONFIG_4G; // ±4g scale
         HAL_I2C_Mem_Write(&hi2c1, mpu_addr, 0x1C, 1, &config_data, 1, 100); // ACCEL_CONFIG
 
         len = sprintf(msg, "SENSOR_INITIALIZED_SUCCESSFULLY\r\n");

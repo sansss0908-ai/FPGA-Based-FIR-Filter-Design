@@ -22,8 +22,9 @@
 /* Expected Device ID */
 #define MPU6050_WHO_AM_I_VAL     0x68
 
-/* Scale Factors for Default Ranges (+/-2g for Accel, +/-250 deg/s for Gyro) */
-#define MPU6050_ACCEL_SENS_2G    16384.0f
+/* Scale factors for the configured ranges (+/-4g accel, +/-250 deg/s gyro). */
+#define MPU6050_ACCEL_CONFIG_4G  0x08
+#define MPU6050_ACCEL_SENS_4G    8192.0f
 #define MPU6050_GYRO_SENS_250    131.0f
 
 /* =========================================================================

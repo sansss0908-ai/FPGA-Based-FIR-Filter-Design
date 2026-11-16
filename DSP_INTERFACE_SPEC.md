@@ -8,7 +8,11 @@
 
 ## 2. Data Representation & Fixed-Point Format
 * **Input Signal Data Type:** 16-bit Signed 2's Complement Integer (`int16_t`)
-* **Scale Factor:** $1\text{ g} = 16384 \text{ LSB}$ ($\pm 2\text{g}$ full scale)
+* **Accelerometer Range:** $\pm 4\text{g}$ (`ACCEL_CONFIG.AFS_SEL = 01`)
+* **Scale Factor:** $1\text{ g} = 8192 \text{ LSB}$ at the configured $\pm 4\text{g}$ range
+* **Data-quality note:** The checked-in capture has nine samples at +32767. It
+  was recorded with the previous $\pm 2\text{g}$ setting and is clipped; use a
+  fresh capture for physical-acceleration analysis.
 * **Coefficient Format:** Q15 Signed Fixed-Point ($1\text{ sign bit}, 15\text{ fractional bits}$)
   $$\text{Coeff}_{\text{Q15}} = \text{round}(h[n] \times 32768)$$
 * **Accumulator:** Signed 64-bit minimum
