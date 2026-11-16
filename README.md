@@ -45,7 +45,10 @@ and re-record before using the data as unclipped measurements.
 The STM32 timer divisor is nominally 500 Hz with the current 84 MHz timer
 clock. The logger measures the effective UART sample rate over the capture;
 inspect `sample_rate_hz.txt` after each recording. The measurement requires
-the board to be running and cannot be verified by simulation alone.
+the board to be running and cannot be verified by simulation alone. The
+firmware increments `timer_overrun_count` if another timer event arrives
+before the main loop consumes the pending one; inspect it in the debugger when
+checking for lost samples.
 
 ## FPGA integration checklist
 

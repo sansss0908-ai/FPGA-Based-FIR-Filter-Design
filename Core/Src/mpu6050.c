@@ -11,9 +11,9 @@ HAL_StatusTypeDef MPU6050_Init(I2C_HandleTypeDef *hi2c) {
     if (HAL_I2C_Mem_Read(hi2c, MPU6050_I2C_ADDR, MPU6050_REG_WHO_AM_I, 1, &check, 1, 100) != HAL_OK) {
         return HAL_ERROR;
     }
-/*   if (check != 0x68 && check != 0x70) {
-        return HAL_ERROR; // Device ID mismatch!
-    } */
+    if (check != MPU6050_WHO_AM_I_VAL) {
+        return HAL_ERROR;
+    }
 
     // 2. Wake device up from sleep mode by clearing bit 6 in PWR_MGMT_1 register
     data = 0x00;
@@ -23,13 +23,22 @@ HAL_StatusTypeDef MPU6050_Init(I2C_HandleTypeDef *hi2c) {
 
     // 3. Set Sample Rate Divider to 1 kHz (SMPLRT_DIV = 7)
     data = 0x07;
-    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_REG_SMPLRT_DIV, 1, &data, 1, 100);
+    if (HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_REG_SMPLRT_DIV,
+                          1, &data, 1, 100) != HAL_OK) {
+        return HAL_ERROR;
+    }
 
     // 4. Configure Full Scale Range: Accel +/- 4g and Gyro +/- 250 deg/s.
     data = MPU6050_ACCEL_CONFIG_4G;
-    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_REG_ACCEL_CONFIG, 1, &data, 1, 100);
+    if (HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_REG_ACCEL_CONFIG,
+                          1, &data, 1, 100) != HAL_OK) {
+        return HAL_ERROR;
+    }
     data = 0x00;
-    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_REG_GYRO_CONFIG, 1, &data, 1, 100);
+    if (HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_REG_GYRO_CONFIG,
+                          1, &data, 1, 100) != HAL_OK) {
+        return HAL_ERROR;
+    }
 
     return HAL_OK;
 }

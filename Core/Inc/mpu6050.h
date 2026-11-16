@@ -6,7 +6,7 @@
 /* =========================================================================
  * I2C ADDRESSES & REGISTER MAP (MPU-6050)
  * ========================================================================= */
-#define MPU6050_I2C_ADDR         (0x69 << 1) // 7-bit 0x68 shifted to 8-bit write address (0xD0)
+#define MPU6050_I2C_ADDR         (0x69 << 1) // AD0 high: 7-bit address 0x69 for STM32 HAL
 
 /* Registers */
 #define MPU6050_REG_SMPLRT_DIV   0x19        // Sample Rate Divider

@@ -51,6 +51,7 @@
 
 /* USER CODE BEGIN PV */
 volatile uint8_t timer_flag = 0;
+volatile uint32_t timer_overrun_count = 0;
 uint8_t tx_buffer[64];
 MPU6050_Data_t mpu_data;
 uint8_t mpu_addr = 0;
@@ -64,7 +65,7 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void SPI_Send_Sample(int16_t sample)
+HAL_StatusTypeDef SPI_Send_Sample(int16_t sample)
 {
     uint8_t bytes[2];
     bytes[0] = (uint8_t)((sample >> 8) & 0xFF); // High Byte (MSB)
@@ -74,10 +75,11 @@ void SPI_Send_Sample(int16_t sample)
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 
     // Transmit 2 bytes over SPI1
-    HAL_SPI_Transmit(&hspi1, bytes, 2, 10);
+    HAL_StatusTypeDef status = HAL_SPI_Transmit(&hspi1, bytes, 2, 10);
 
     // Pull CS HIGH (PA4)
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+    return status;
 }
 /* USER CODE END 0 */
 
@@ -120,12 +122,17 @@ int main(void)
     int len = sprintf(msg, "MCU_STARTED\r\n");
     HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
 
-    // 2. Scan I2C bus for MPU6050 address (0x68 or 0x69)
-    for (uint8_t addr = 1; addr < 128; addr++)
+    // 2. Probe only MPU6050 addresses and verify WHO_AM_I before configuring.
+    for (uint8_t addr = 0x68; addr <= 0x69; addr++)
     {
-        if (HAL_I2C_IsDeviceReady(&hi2c1, (uint16_t)(addr << 1), 2, 50) == HAL_OK)
+        uint8_t who_am_i = 0;
+        uint16_t candidate_addr = (uint16_t)(addr << 1);
+        if (HAL_I2C_IsDeviceReady(&hi2c1, candidate_addr, 2, 50) == HAL_OK &&
+            HAL_I2C_Mem_Read(&hi2c1, candidate_addr, MPU6050_REG_WHO_AM_I,
+                             1, &who_am_i, 1, 100) == HAL_OK &&
+            who_am_i == MPU6050_WHO_AM_I_VAL)
         {
-            mpu_addr = (addr << 1); // Save 8-bit shifted address
+            mpu_addr = (uint8_t)candidate_addr;
             len = sprintf(msg, "FOUND_SENSOR_AT_0x%02X\r\n", addr);
             HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
             break;
@@ -141,16 +148,33 @@ int main(void)
     {
         // 3. Sensor found! Wake it up with 100ms timeout so it CANNOT hang
         uint8_t wake_data = 0x00;
-        HAL_I2C_Mem_Write(&hi2c1, mpu_addr, 0x6B, 1, &wake_data, 1, 100); // PWR_MGMT_1
+        if (HAL_I2C_Mem_Write(&hi2c1, mpu_addr, MPU6050_REG_PWR_MGMT_1,
+                              1, &wake_data, 1, 100) != HAL_OK)
+        {
+            len = sprintf(msg, "ERROR_MPU6050_WAKE_FAILED\r\n");
+            HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
+            Error_Handler();
+        }
 
         uint8_t config_data = MPU6050_ACCEL_CONFIG_4G; // ±4g scale
-        HAL_I2C_Mem_Write(&hi2c1, mpu_addr, 0x1C, 1, &config_data, 1, 100); // ACCEL_CONFIG
+        if (HAL_I2C_Mem_Write(&hi2c1, mpu_addr, MPU6050_REG_ACCEL_CONFIG,
+                              1, &config_data, 1, 100) != HAL_OK)
+        {
+            len = sprintf(msg, "ERROR_MPU6050_RANGE_CONFIG_FAILED\r\n");
+            HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
+            Error_Handler();
+        }
 
         len = sprintf(msg, "SENSOR_INITIALIZED_SUCCESSFULLY\r\n");
         HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
 
         // Start 500 Hz Timer interrupt
-        HAL_TIM_Base_Start_IT(&htim2);
+        if (HAL_TIM_Base_Start_IT(&htim2) != HAL_OK)
+        {
+            len = sprintf(msg, "ERROR_SAMPLE_TIMER_START_FAILED\r\n");
+            HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
+            Error_Handler();
+        }
     }
   /* USER CODE END 2 */
 
@@ -164,10 +188,14 @@ int main(void)
   /* USER CODE BEGIN WHILE */
     while (1)
       {
-          if (timer_flag)
-          {
-              timer_flag = 0;
+          uint8_t sample_due;
+          __disable_irq();
+          sample_due = timer_flag;
+          timer_flag = 0;
+          __enable_irq();
 
+          if (sample_due)
+          {
               if (mpu_addr != 0)
               {
                   // Read 6 accelerometer bytes directly from sensor (0x3B = ACCEL_XOUT_H)
@@ -180,7 +208,16 @@ int main(void)
                       len = sprintf((char*)tx_buffer, "%d\r\n", raw_z);
                       HAL_UART_Transmit(&huart2, tx_buffer, len, 10);
                       // 2. Send via SPI to FPGA!
-                      SPI_Send_Sample(raw_z);
+                      if (SPI_Send_Sample(raw_z) != HAL_OK)
+                      {
+                          len = sprintf((char*)tx_buffer, "ERROR_SPI_SAMPLE_TRANSMIT\r\n");
+                          HAL_UART_Transmit(&huart2, tx_buffer, len, 100);
+                      }
+                  }
+                  else
+                  {
+                      len = sprintf((char*)tx_buffer, "ERROR_MPU6050_READ_FAILED\r\n");
+                      HAL_UART_Transmit(&huart2, tx_buffer, len, 100);
                   }
               }
           }
@@ -243,7 +280,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM2)
     {
-        timer_flag = 1; // Flag main loop to execute I2C read
+        if (timer_flag)
+            timer_overrun_count++;
+        timer_flag = 1;
     }
 }
 /* USER CODE END 4 */
